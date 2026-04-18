@@ -1,0 +1,2316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neural-Trace v2 — Blockchain Forensic Intelligence</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg:       #050810;
+    --panel:    #0a0f1e;
+    --border:   #1a2040;
+    --accent:   #00f5c4;
+    --accent2:  #ff6b35;
+    --red:      #ff3b5c;
+    --yellow:   #ffd93d;
+    --blue:     #4facfe;
+    --purple:   #b44bff;
+    --grey:     #3a4060;
+    --text:     #c8d4f0;
+    --text-dim: #5a6890;
+    --mono:     'Share Tech Mono', monospace;
+    --sans:     'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── TOP NAV ─────────────────────────────────────────────────────────────── */
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0 20px 0 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+    height: 44px;
+  }
+
+  .logo {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+    padding: 0 20px;
+    border-right: 1px solid var(--border);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .logo span { color: var(--text-dim); font-weight: 400; }
+  .logo em   { color: var(--accent2);  font-style: normal; font-size: 11px; margin-left: 6px; }
+
+  .nav-tabs {
+    display: flex;
+    height: 100%;
+    margin-right: auto;
+  }
+
+  .nav-tab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 20px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    border-right: 1px solid var(--border);
+    transition: all 0.2s;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .nav-tab:hover { color: var(--text); background: rgba(255,255,255,0.02); }
+
+  .nav-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: rgba(0,245,196,0.04);
+  }
+
+  .nav-tab .nav-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.6;
+  }
+
+  .nav-tab.active .nav-dot { opacity: 1; box-shadow: 0 0 6px currentColor; }
+
+  /* ETH price + right side controls */
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .eth-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0,245,196,0.05);
+    border: 1px solid rgba(0,245,196,0.15);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+  .eth-chip label { color: var(--text-dim); font-size: 10px; }
+
+  /* ── PAGE SWITCHER ───────────────────────────────────────────────────────── */
+  .page { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .page.active { display: flex; }
+
+  /* ── SHARED PROGRESS BAR ─────────────────────────────────────────────────── */
+  .progress-bar {
+    height: 2px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.3s;
+  }
+  .progress-fill.indeterminate {
+    width: 30%;
+    animation: slide 1.2s ease-in-out infinite;
+  }
+  @keyframes slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+  }
+
+  /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
+  button {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 18px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary   { background: var(--accent); color: var(--bg); font-weight: bold; letter-spacing: 1px; }
+  .btn-primary:hover   { background: #00ddb0; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-secondary { background: transparent; border: 1px solid var(--accent2); color: var(--accent2); }
+  .btn-secondary:hover { background: var(--accent2); color: var(--bg); }
+
+  .btn-ghost     { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+  .btn-ghost:hover { border-color: var(--text-dim); color: var(--text); }
+
+  .btn-purple    { background: transparent; border: 1px solid var(--purple); color: var(--purple); }
+  .btn-purple:hover { background: var(--purple); color: var(--bg); }
+
+  .btn-blue      { background: transparent; border: 1px solid var(--blue); color: var(--blue); }
+  .btn-blue:hover { background: var(--blue); color: var(--bg); }
+
+  .btn-red       { background: transparent; border: 1px solid var(--red); color: var(--red); }
+  .btn-red:hover { background: var(--red); color: var(--bg); }
+
+  .btn-sm        { font-size: 10px; padding: 4px 10px; }
+
+  /* ── INPUTS ──────────────────────────────────────────────────────────────── */
+  input[type="text"], input[type="search"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type="text"]:focus, input[type="search"]:focus { border-color: var(--accent); }
+  input[type="text"]::placeholder, input[type="search"]::placeholder { color: var(--text-dim); }
+
+  select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* ── MAIN LAYOUT ─────────────────────────────────────────────────────────── */
+  .main-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── GRAPH AREA (TRACE page) ─────────────────────────────────────────────── */
+  #graph-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  svg { width: 100%; height: 100%; }
+
+  #graph-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,245,196,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,245,196,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  #graph-svg { position: relative; z-index: 1; }
+
+  /* ── SIDEBAR ─────────────────────────────────────────────────────────────── */
+  .sidebar {
+    width: 320px;
+    border-left: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-content { display: none; flex: 1; overflow-y: auto; padding: 12px; }
+  .tab-content.active { display: block; }
+
+  /* ── NODE DETAIL ─────────────────────────────────────────────────────────── */
+  .node-detail { font-size: 11px; line-height: 1.6; }
+  .node-detail .addr { color: var(--accent); word-break: break-all; font-size: 10px; margin-bottom: 8px; }
+  .node-detail .tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: bold; margin-bottom: 8px; letter-spacing: 1px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
+  .detail-row .label { color: var(--text-dim); }
+  .detail-row .value { color: var(--text); text-align: right; max-width: 180px; word-break: break-all; }
+
+  /* ── WALLET LIST ─────────────────────────────────────────────────────────── */
+  .wallet-item { padding: 8px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.2s; font-size: 11px; }
+  .wallet-item:hover { border-color: var(--accent); }
+  .wallet-item .wi-addr { color: var(--accent); font-size: 10px; word-break: break-all; margin-bottom: 4px; }
+  .wallet-item .wi-row  { display: flex; justify-content: space-between; color: var(--text-dim); }
+
+  /* ── LOG ─────────────────────────────────────────────────────────────────── */
+  #log { font-size: 12px; line-height: 1.8; color: var(--text-dim); }
+  #log .log-info   { color: var(--text-dim); }
+  #log .log-found  { color: var(--accent); }
+  #log .log-warn   { color: var(--yellow); }
+  #log .log-error  { color: var(--red); }
+  #log .log-bridge { color: var(--blue); }
+  #log .log-kyc    { color: var(--accent2); }
+
+  /* ── STATUS BAR ──────────────────────────────────────────────────────────── */
+  .statusbar {
+    padding: 6px 20px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 20px;
+    flex-shrink: 0;
+    background: var(--panel);
+  }
+  .statusbar span { color: var(--text); }
+
+  /* ── EMPTY STATE ─────────────────────────────────────────────────────────── */
+  .empty-state {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+  .empty-state .big { font-size: 48px; margin-bottom: 12px; opacity: 0.3; }
+  .empty-state p    { font-size: 12px; letter-spacing: 1px; }
+
+  /* ── TOOLTIP ─────────────────────────────────────────────────────────────── */
+  .tooltip {
+    position: absolute;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    font-size: 11px;
+    border-radius: 4px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 100;
+    max-width: 280px;
+  }
+  .tooltip.visible { opacity: 1; }
+
+  /* ── LEGEND ──────────────────────────────────────────────────────────────── */
+  .legend {
+    position: absolute;
+    bottom: 12px; left: 12px;
+    background: rgba(10,15,30,0.9);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    font-size: 10px;
+    border-radius: 4px;
+    line-height: 1.9;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── HISTORY PANEL ───────────────────────────────────────────────────────── */
+  #history-panel {
+    position: absolute;
+    top: 0; right: 0;
+    width: 260px; height: 100%;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: none;
+    flex-direction: column;
+    z-index: 20;
+    font-size: 11px;
+  }
+  #history-panel.open { display: flex; }
+  .history-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .history-close { cursor: pointer; background: none; border: none; color: var(--text-dim); font-size: 14px; padding: 0 4px; }
+  .history-close:hover { color: var(--red); }
+  #history-list { overflow-y: auto; flex: 1; padding: 8px; }
+  .history-item { padding: 8px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.2s; }
+  .history-item:hover { border-color: var(--accent); }
+  .history-item .h-addr { color: var(--accent); font-size: 10px; margin-bottom: 3px; word-break: break-all; }
+  .history-item .h-meta { color: var(--text-dim); font-size: 10px; }
+
+  /* ── GRAPH ANIMATIONS ────────────────────────────────────────────────────── */
+  @keyframes hexPulse    { 0%,100%{stroke-opacity:.6} 50%{stroke-opacity:1} }
+  @keyframes kycPulse    { 0%,100%{stroke-opacity:.8;filter:drop-shadow(0 0 6px #ff3b5c)} 50%{stroke-opacity:1;filter:drop-shadow(0 0 14px #ff3b5c)} }
+  @keyframes originSpin  { from{stroke-dashoffset:0} to{stroke-dashoffset:-28} }
+  @keyframes nodeAppear  { from{opacity:0;transform:scale(.3)} to{opacity:1;transform:scale(1)} }
+  @keyframes kycRingPulse{ 0%{r:30;opacity:.7;stroke-width:2} 60%{r:42;opacity:0;stroke-width:1} 100%{r:30;opacity:0;stroke-width:0} }
+
+  .node-g { animation: nodeAppear 0.3s ease-out; }
+  .node-g:hover .node-hex { stroke-opacity: 1 !important; }
+  svg .link { transition: opacity 0.2s; }
+  .origin-ring { animation: originSpin 8s linear infinite; }
+  .node-g[data-type="HOT_WALLET_KYC"] .node-hex { animation: kycPulse 2s ease-in-out infinite; }
+  .kyc-pulse-ring { animation: kycRingPulse 2s ease-out infinite; }
+
+  .link-neon-high { stroke: #00f5c4 !important; stroke-opacity: 0.85 !important; }
+  .link-neon-mid  { stroke: #4facfe !important; stroke-opacity: 0.55 !important; }
+  .link-neon-low  { stroke: #1e3a6e !important; stroke-opacity: 0.30 !important; }
+
+  .node-g.path-active .node-hex { stroke-width: 3 !important; stroke-opacity: 1 !important; }
+  .node-g.path-dimmed { opacity: 0.12 !important; }
+  .link.path-active { stroke-opacity: 1 !important; stroke-width: 3px !important; }
+  .link.path-dimmed { opacity: 0.04 !important; }
+
+  /* ── COPY FLASH ──────────────────────────────────────────────────────────── */
+  .copy-flash {
+    position: fixed; bottom: 40px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent); color: var(--bg);
+    font-family: var(--mono); font-size: 11px; font-weight: bold;
+    padding: 6px 18px; border-radius: 4px;
+    pointer-events: none; opacity: 0;
+    transition: opacity 0.2s; z-index: 999; letter-spacing: 1px;
+  }
+  .copy-flash.show { opacity: 1; }
+  .stat-anim { transition: color 0.3s; }
+  .stat-anim.bump { color: var(--accent) !important; }
+
+  /* ── MISC ────────────────────────────────────────────────────────────────── */
+  .section-title { font-size: 10px; letter-spacing: 2px; color: var(--text-dim); margin: 12px 0 6px; text-transform: uppercase; }
+  .copy-btn { font-size: 9px; padding: 2px 6px; background: var(--border); color: var(--text-dim); border: none; border-radius: 2px; cursor: pointer; margin-left: 6px; }
+  .copy-btn:hover { color: var(--accent); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     MONITOR PAGE
+  ══════════════════════════════════════════════════════════════════════════ */
+  .monitor-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .monitor-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .monitor-sidebar {
+    width: 320px;
+    border-left: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  /* Control bar */
+  .monitor-controls {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-dim);
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(0,245,196,0.03);
+    color: var(--accent);
+  }
+  .drop-zone .dz-icon { font-size: 32px; margin-bottom: 10px; opacity: 0.4; }
+  .drop-zone .dz-label { display: block; margin-bottom: 6px; }
+  .drop-zone .dz-sub   { font-size: 10px; opacity: 0.5; }
+
+  /* Alert cards */
+  .alert-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .alert-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+  }
+  .alert-card-body { padding: 12px 14px; }
+
+  .alert-high   { border-color: rgba(255,59,92,0.4); }
+  .alert-high .alert-card-header { background: rgba(255,59,92,0.08); color: var(--red); }
+  .alert-med    { border-color: rgba(255,217,61,0.3); }
+  .alert-med .alert-card-header  { background: rgba(255,217,61,0.06); color: var(--yellow); }
+  .alert-info   { border-color: rgba(79,172,254,0.3); }
+  .alert-info .alert-card-header { background: rgba(79,172,254,0.06); color: var(--blue); }
+  .alert-ok     { border-color: rgba(0,245,196,0.2); }
+  .alert-ok .alert-card-header   { background: rgba(0,245,196,0.05); color: var(--accent); }
+
+  /* Stat grid */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .stat-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+  }
+  .stat-box .sb-val { font-size: 22px; font-weight: bold; color: var(--accent); display: block; margin-bottom: 4px; }
+  .stat-box .sb-lbl { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; }
+
+  /* Table */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .data-table th { padding: 8px 10px; text-align: left; color: var(--text-dim); font-size: 10px; letter-spacing: 1px; border-bottom: 1px solid var(--border); font-weight: normal; }
+  .data-table td { padding: 8px 10px; border-bottom: 1px solid rgba(26,32,64,0.5); vertical-align: top; }
+  .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .data-table .mono { font-family: var(--mono); font-size: 10px; color: var(--text-dim); word-break: break-all; }
+  .data-table .amt  { color: var(--red); font-weight: bold; }
+  .data-table .warn { color: var(--yellow); }
+  .data-table .ok   { color: var(--accent); }
+
+  /* Monitor log */
+  .monitor-log-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+  }
+  .monitor-log { font-size: 12px; line-height: 1.8; }
+  .monitor-log .ml-info  { color: var(--text-dim); }
+  .monitor-log .ml-warn  { color: var(--yellow); }
+  .monitor-log .ml-error { color: var(--red); }
+
+  /* Wallet select list for origin trace */
+  .wallet-select-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    font-size: 11px;
+  }
+  .wallet-select-item:hover { border-color: var(--accent); }
+  .wallet-select-item input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
+  .wallet-select-item .wsi-info { flex: 1; min-width: 0; }
+  .wallet-select-item .wsi-addr { color: var(--accent); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wallet-select-item .wsi-meta { color: var(--text-dim); font-size: 10px; }
+
+  /* Origin trace results */
+  .hop-chain {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .hop-chain-header {
+    padding: 10px 14px;
+    background: rgba(0,245,196,0.05);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .hop-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(26,32,64,0.4);
+    font-size: 11px;
+  }
+  .hop-row:last-child { border-bottom: none; }
+  .hop-num {
+    flex-shrink: 0;
+    width: 60px;
+    font-size: 10px;
+    color: var(--text-dim);
+    padding-top: 2px;
+  }
+  .hop-content { flex: 1; min-width: 0; }
+  .hop-addr { color: var(--accent); font-size: 10px; word-break: break-all; margin-bottom: 4px; }
+  .hop-type { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
+  .hop-stats { color: var(--text-dim); font-size: 10px; }
+
+  /* Download button */
+  .dl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(0,245,196,0.08);
+    border: 1px solid rgba(0,245,196,0.3);
+    border-radius: 4px;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .dl-btn:hover { background: rgba(0,245,196,0.15); border-color: var(--accent); }
+
+  /* Section heading */
+  .sec-heading {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sec-heading::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+</style>
+</head>
+<body>
+
+<!-- ── TOP NAVIGATION ────────────────────────────────────────────────────── -->
+<div class="top-nav">
+  <div class="logo">Neural<span>-Trace</span><em>v2</em></div>
+
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="switchPage('trace')" id="nav-trace">
+      <div class="nav-dot"></div>TRACE
+    </div>
+    <div class="nav-tab" onclick="switchPage('monitor')" id="nav-monitor">
+      <div class="nav-dot" style="background:var(--yellow)"></div>MONITOR
+    </div>
+    <div class="nav-tab" onclick="switchPage('origin')" id="nav-origin">
+      <div class="nav-dot" style="background:var(--blue)"></div>ORIGIN TRACE
+    </div>
+  </div>
+
+  <div class="nav-right">
+    <div class="eth-chip">
+      <label>ETH</label>
+      <span id="eth-price-display" style="color:var(--yellow);min-width:80px">loading...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PAGE 1 — NEURAL TRACE (forward tracer — unchanged from v1)
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="page active" id="page-trace">
+
+  <!-- Trace toolbar -->
+  <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0">
+    <input type="text" id="addr-input" placeholder="INPUT ETH ADDRESS TO START SCAN" style="flex:1"/>
+    <input type="text" id="project-name" placeholder="PROJECT NAME" style="flex:0 0 160px;color:var(--yellow)"/>
+    <select id="depth-select">
+      <option value="3">3 hops</option>
+      <option value="5" selected>5 hops</option>
+      <option value="7">7 hops</option>
+    </select>
+    <button class="btn-primary" id="trace-btn" onclick="startTrace()">TRACE</button>
+    <button class="btn-secondary" onclick="exportResults()">EXPORT REPORT</button>
+    <button class="btn-purple" onclick="exportPNG()" title="Export graph as PNG">PNG</button>
+    <button class="btn-blue" onclick="toggleHistory()">HISTORY</button>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+
+  <div class="main-layout">
+    <div id="graph-container">
+      <div class="empty-state" id="empty-state">
+        <div class="big">⬡</div>
+        <p>PASTE A WALLET ADDRESS AND HIT TRACE</p>
+        <p style="margin-top:6px;font-size:10px;opacity:0.6">FOLLOWS MONEY FORWARD — UP TO 7 HOPS DEEP</p>
+      </div>
+      <svg id="graph-svg"></svg>
+      <div class="legend" id="legend" style="display:none">
+        <div class="legend-item"><div class="legend-dot" style="background:#1a8cff"></div> INGEST (victim collector)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#b44bff"></div> AGGR (treasury hub)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ffd93d"></div> DISP (bulk distributor)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4facfe"></div> BRDG (cross-chain exit)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff6b35"></div> OPER (operator — KYC linked)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff3b5c;box-shadow:0 0 6px #ff3b5c"></div> EXCH (exchange — subpoena)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff3b5c"></div> MIX (Tornado Cash)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3a5070"></div> RLY (passthrough)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2a3550"></div> CTR (smart contract)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4a5570"></div> ? (unknown)</div>
+      </div>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <!-- History panel -->
+    <div id="history-panel">
+      <div class="history-header">
+        TRACE HISTORY
+        <button class="history-close" onclick="toggleHistory()">✕</button>
+      </div>
+      <div id="history-list"><div style="color:var(--text-dim);padding:20px;text-align:center;font-size:10px">Loading...</div></div>
+    </div>
+
+    <div class="sidebar">
+      <div class="sidebar-tabs">
+        <div class="tab active" onclick="switchTab('detail')">DETAIL</div>
+        <div class="tab" onclick="switchTab('wallets')">WALLETS</div>
+        <div class="tab" onclick="switchTab('log')">LOG</div>
+      </div>
+      <div class="tab-content active" id="tab-detail">
+        <div style="color:var(--text-dim);font-size:11px;padding:20px 0;text-align:center">Click a node to inspect</div>
+      </div>
+      <div class="tab-content" id="tab-wallets">
+        <div id="wallet-list"></div>
+      </div>
+      <div class="tab-content" id="tab-log">
+        <div style="padding:6px 0 8px;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;gap:6px">
+          <button class="copy-btn" style="font-size:10px;padding:3px 10px" onclick="copyLog()">⎘ COPY LOG</button>
+          <button class="copy-btn" style="font-size:10px;padding:3px 10px" onclick="clearLog()">✕ CLEAR</button>
+        </div>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <div>NODES: <span id="stat-nodes" class="stat-anim">0</span></div>
+    <div>EDGES: <span id="stat-edges" class="stat-anim">0</span></div>
+    <div>KYC TARGETS: <span id="stat-kyc" class="stat-anim">0</span></div>
+    <div>BRIDGES: <span id="stat-bridges" class="stat-anim">0</span></div>
+    <div>ETH TRACED: <span id="stat-eth" class="stat-anim">0.000</span> Ξ</div>
+    <div>USD VALUE: <span id="stat-usd" class="stat-anim">—</span></div>
+    <div>STATUS: <span id="stat-status">IDLE</span></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PAGE 2 — MONITOR
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-monitor">
+
+  <!-- Monitor controls -->
+  <div class="monitor-controls">
+    <span style="font-size:10px;color:var(--text-dim);white-space:nowrap">SELECT TRACE:</span>
+    <span id="mon-file-label" style="font-size:10px;color:var(--accent);flex:1">No trace selected — run a trace first</span>
+    <select id="mon-window" style="font-size:11px">
+      <option value="48h">Last 48 Hours</option>
+      <option value="7d">Last 7 Days</option>
+    </select>
+    <button class="btn-primary" id="mon-run-btn" onclick="runMonitor()" disabled>RUN MONITOR</button>
+    <button class="btn-secondary" id="mon-export-btn" onclick="exportMonitor()" disabled>EXPORT REPORT</button>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="mon-progress"></div></div>
+
+  <div class="monitor-layout">
+
+    <!-- Main results area -->
+    <div class="monitor-main" id="mon-main">
+
+      <!-- Trace selector list (shown when no trace selected) -->
+      <div id="mon-trace-list">
+        <div class="sec-heading">AVAILABLE TRACES</div>
+        <div id="mon-trace-items" style="display:flex;flex-direction:column;gap:8px">
+          <div style="color:var(--text-dim);font-size:11px;padding:20px;text-align:center">Loading saved traces...</div>
+        </div>
+      </div>
+
+      <!-- Results (hidden until run) -->
+      <div id="mon-results" style="display:none">
+
+        <!-- Stat grid -->
+        <div class="stat-grid" id="mon-stats"></div>
+
+        <!-- Terminal output -->
+        <pre id="mon-terminal" style="font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--text);white-space:pre-wrap;word-break:break-all;padding:4px 0"></pre>
+
+        <!-- Saved confirmation -->
+        <div id="mon-saved" style="display:none;margin-top:12px;padding:10px;border:1px solid rgba(0,245,196,0.2);border-radius:4px;font-size:10px;color:var(--accent)"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PAGE 3 — ORIGIN TRACE (backward hop)
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-origin">
+
+  <!-- Origin controls -->
+  <div class="monitor-controls">
+    <span style="font-size:10px;color:var(--text-dim);white-space:nowrap">SELECT TRACE:</span>
+    <span id="ori-file-label" style="font-size:10px;color:var(--accent)">No trace selected</span>
+    <span style="font-size:10px;color:var(--text-dim)">OR</span>
+    <input type="text" id="ori-addr-input" placeholder="0x... single address" style="flex:1;max-width:340px"/>
+    <button class="btn-primary" id="ori-run-btn" onclick="runOriginTrace()" disabled>RUN ORIGIN TRACE</button>
+    <button class="btn-secondary" id="ori-export-btn" onclick="exportOrigin()" disabled>EXPORT REPORT</button>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="ori-progress"></div></div>
+
+  <div class="monitor-layout">
+
+    <!-- Origin main -->
+    <div class="monitor-main" id="ori-main">
+
+      <!-- Trace selector list -->
+      <div id="ori-trace-list">
+        <div class="sec-heading">AVAILABLE TRACES</div>
+        <div id="ori-trace-items" style="display:flex;flex-direction:column;gap:8px">
+          <div style="color:var(--text-dim);font-size:11px;padding:20px;text-align:center">Loading saved traces...</div>
+        </div>
+      </div>
+
+      <!-- Wallet select (shown after trace selected) -->
+      <div id="ori-wallet-select" style="display:none">
+        <div class="sec-heading">
+          SELECT WALLETS TO TRACE
+          <span id="ori-wallet-count" style="color:var(--text-dim);font-size:10px"></span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn-ghost btn-sm" onclick="oriSelectAll(true)">SELECT ALL</button>
+          <button class="btn-ghost btn-sm" onclick="oriSelectAll(false)">DESELECT ALL</button>
+          <button class="btn-ghost btn-sm" onclick="oriBackToList()">← BACK</button>
+        </div>
+        <div id="ori-wallet-list"></div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button class="btn-primary" onclick="runOriginTrace()">TRACE SELECTED</button>
+          <button class="btn-ghost btn-sm" onclick="runOriginTraceAll()">TRACE ALL</button>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="ori-results" style="display:none">
+        <!-- Live log — shown during run, hidden on completion -->
+        <div id="ori-live" style="display:block">
+          <div class="sec-heading">TRACING IN PROGRESS</div>
+          <div id="ori-counter" style="font-family:var(--mono);font-size:13px;color:var(--accent);padding:10px 0 14px;letter-spacing:1px;border-bottom:1px solid var(--border);margin-bottom:8px">
+            Initialising...
+          </div>
+          <pre id="ori-log-terminal" style="font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--text);white-space:pre-wrap;word-break:break-all;padding:4px 0;min-height:200px"></pre>
+        </div>
+        <!-- Table — hidden during run, shown on completion -->
+        <div id="ori-table-wrap" style="display:none">
+          <div class="sec-heading">ORIGIN TRACE RESULTS</div>
+          <div id="ori-summary" style="margin-bottom:16px"></div>
+          <div id="ori-chains"></div>
+        </div>
+        <div id="ori-download" style="display:none;padding:10px 0;gap:10px;align-items:center;flex-wrap:wrap"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="copy-flash" id="copy-flash">COPIED</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════════════════════ -->
+<script>
+const API_KEY  = '__ETHERSCAN_API_KEY__';
+const BASE     = 'https://api.etherscan.io/v2/api';
+const CHAIN_ID = 1;
+let lastApiCall = 0;
+
+// ── ETH PRICE ─────────────────────────────────────────────────────────────────
+let _ethPrice = 0;
+function getEthPrice() { return _ethPrice; }
+
+async function fetchEthPrice() {
+  try {
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+    const d = await r.json();
+    _ethPrice = d?.ethereum?.usd || 0;
+    const el = document.getElementById('eth-price-display');
+    if (el) el.textContent = _ethPrice ? '$' + _ethPrice.toLocaleString() : '—';
+    updateStats();
+  } catch(e) {
+    const el = document.getElementById('eth-price-display');
+    if (el) el.textContent = '—';
+  }
+}
+fetchEthPrice();
+setInterval(fetchEthPrice, 60000);
+
+// ── PAGE SWITCHER ─────────────────────────────────────────────────────────────
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+
+  // Load trace list when switching to monitor or origin
+  if (name === 'monitor') loadTraceList('mon-trace-items', 'monSelectTrace');
+  if (name === 'origin')  loadTraceList('ori-trace-items', 'oriSelectTrace');
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+function fmtUSD(n) { return '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtETH(n) { return Number(n||0).toFixed(4) + ' ETH'; }
+function shortAddr(a) { return a ? a.slice(0,6) + '…' + a.slice(-4) : ''; }
+
+function copyFlash(text) {
+  navigator.clipboard.writeText(text).catch(() => {});
+  const el = document.getElementById('copy-flash');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1200);
+}
+
+// ── COPY FLASH ─────────────────────────────────────────────────────────────────
+function copyLog() {
+  const el = document.getElementById('log');
+  navigator.clipboard.writeText(el.innerText || '').then(() => {
+    const flash = document.getElementById('copy-flash');
+    flash.textContent = 'LOG COPIED';
+    flash.classList.add('show');
+    setTimeout(() => { flash.classList.remove('show'); flash.textContent = 'COPIED'; }, 1400);
+  });
+}
+function clearLog()    { document.getElementById('log').innerHTML = ''; }
+function clearMonLog() { document.getElementById('mon-log').innerHTML = ''; }
+function clearOriLog() { document.getElementById('ori-log').innerHTML = ''; }
+
+function copyMonLog() {
+  const el = document.getElementById('mon-log');
+  navigator.clipboard.writeText(el.innerText || '').then(() => {
+    const flash = document.getElementById('copy-flash');
+    flash.textContent = 'LOG COPIED';
+    flash.classList.add('show');
+    setTimeout(() => { flash.classList.remove('show'); flash.textContent = 'COPIED'; }, 1400);
+  });
+}
+
+function oriLog(msg, level = 'info') {
+  // Intercept progress marker — update counter, don't log as raw line
+  if (msg.startsWith('WALLET_PROGRESS:')) {
+    const parts = msg.split(':');
+    const current = parts[1];
+    const total   = parts[2];
+    const label   = parts.slice(3).join(':');
+    const counter = document.getElementById('ori-counter');
+    if (counter) {
+      counter.innerHTML = `TRACING WALLET <span style="color:var(--accent);font-size:16px;font-weight:bold">${current}</span> / ${total} &nbsp;—&nbsp; <span style="color:var(--text)">${label}</span>`;
+    }
+    // Also log it cleanly
+    const el = document.getElementById('ori-log-terminal');
+    if (el) {
+      const span = document.createElement('span');
+      span.style.color = 'var(--text-dim)';
+      span.textContent = `[${new Date().toTimeString().slice(0,8)}] Tracing ${current}/${total}: ${label}\n`;
+      el.appendChild(span);
+      el.scrollTop = el.scrollHeight;
+    }
+    return;
+  }
+  const el = document.getElementById('ori-log-terminal');
+  if (!el) return;
+  const ts = new Date().toTimeString().slice(0,8);
+  const color = level === 'warn' ? 'var(--yellow)' : level === 'error' ? 'var(--red)' : 'var(--text-dim)';
+  const span = document.createElement('span');
+  span.style.color = color;
+  span.textContent = `[${ts}] ${msg}\n`;
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── TRACE PAGE LOG ────────────────────────────────────────────────────────────
+function log(msg, cls = 'log-info') {
+  const el = document.getElementById('log');
+  const ts = new Date().toTimeString().slice(0,8);
+  el.innerHTML += `<div class="${cls}">[${ts}] ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function monLog(msg, level = 'info') {
+  const el = document.getElementById('mon-terminal');
+  if (!el) return;
+  const ts = new Date().toTimeString().slice(0,8);
+  const color = level === 'warn' ? 'var(--yellow)' : level === 'error' ? 'var(--red)' : 'var(--text-dim)';
+  const span = document.createElement('span');
+  span.style.color = color;
+  span.textContent = `[${ts}] ${msg}\n`;
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── API HELPERS ───────────────────────────────────────────────────────────────
+async function apiDelay() {
+  const now  = Date.now();
+  const wait = Math.max(0, 400 - (now - lastApiCall));
+  if (wait > 0) await delay(wait);
+  lastApiCall = Date.now();
+}
+
+async function fetchWithRetry(url, retries = 4) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await apiDelay();
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      if (d.result === 'Max rate limit reached' || (typeof d.result === 'string' && d.result.includes('rate limit'))) {
+        const wait = 1500 * (i + 1);
+        log(`Rate limit — waiting ${wait}ms...`, 'log-warn');
+        await delay(wait);
+        continue;
+      }
+      return d;
+    } catch(e) {
+      if (i === retries - 1) throw e;
+      await delay(1000 * (i + 1));
+    }
+  }
+}
+
+// ── KNOWN ADDRESSES — loaded from server (single source: config/exchanges.py) ─
+let KNOWN = {};
+async function loadExchanges() {
+  try {
+    KNOWN = await fetch('/exchanges').then(r => r.json());
+  } catch(e) {
+    console.warn('Could not load exchange registry from server:', e.message);
+  }
+}
+loadExchanges();
+
+
+// ── TYPE COLOURS ──────────────────────────────────────────────────────────────
+const TYPE_COLOR = {
+  INGESTION:      '#1a8cff',
+  AGGREGATOR:     '#b44bff',
+  DISPERSE:       '#ffd93d',
+  BRIDGE:         '#4facfe',
+  HOT_WALLET_KYC: '#ff3b5c',
+  MIXER:          '#ff3b5c',
+  OPERATOR:       '#ff6b35',
+  CONTRACT:       '#2a3550',
+  RELAY:          '#3a5070',
+  UNKNOWN:        '#4a5570',
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FORWARD TRACE (Page 1) — all original v1 logic, 100% unchanged
+// ══════════════════════════════════════════════════════════════════════════════
+
+let nodes = new Map();
+let edges = [];
+let visited = new Set();
+let tracing = false;
+let simulation = null;
+let svgSel, gSel;
+
+async function etherscan(params) {
+  const url = BASE + '?' + new URLSearchParams({ ...params, chainid: CHAIN_ID, apikey: API_KEY });
+  const d = await fetchWithRetry(url);
+  if (!d) return [];
+  if (d.status === '0' && d.message !== 'No transactions found') {
+    log(`API note for ${params.action}: ${d.result || d.message}`, 'log-warn');
+    return [];
+  }
+  return d.result || [];
+}
+
+async function getTxs(addr) {
+  try {
+    const normal = await etherscan({ module:'account', action:'txlist', address:addr, sort:'desc', startblock:0, endblock:99999999, offset:500, page:1 });
+    await delay(400);
+    const erc20 = await etherscan({ module:'account', action:'tokentx', address:addr, sort:'desc', offset:200, page:1 });
+    log(`  Fetched ${normal.length} txs + ${erc20.length} token txs for ${shortAddr(addr)}`, 'log-info');
+    return { normal: Array.isArray(normal) ? normal : [], erc20: Array.isArray(erc20) ? erc20 : [] };
+  } catch(e) {
+    log(`  Fetch error for ${shortAddr(addr)}: ${e.message}`, 'log-warn');
+    return { normal: [], erc20: [] };
+  }
+}
+
+async function getBalance(addr) {
+  try {
+    const d = await fetchWithRetry(BASE + '?' + new URLSearchParams({ module:'account', action:'balance', address:addr, tag:'latest', chainid:CHAIN_ID, apikey:API_KEY }));
+    return parseFloat(d?.result || 0) / 1e18;
+  } catch { return 0; }
+}
+
+async function isContract(addr) {
+  try {
+    const d = await fetchWithRetry(BASE + '?' + new URLSearchParams({ module:'proxy', action:'eth_getCode', address:addr, tag:'latest', chainid:CHAIN_ID, apikey:API_KEY }));
+    return d?.result && d.result !== '0x' && d.result.length > 4;
+  } catch { return false; }
+}
+
+async function classifyWallet(addr, txs, inflows, outflows, totalIn, totalOut, txCount) {
+  const laddr = addr.toLowerCase();
+  if (KNOWN[laddr]) {
+    const k = KNOWN[laddr];
+    return { type: k.type, label: k.label, note: k.note || '', stop: k.stop || ['HOT_WALLET_KYC','MIXER','BRIDGE','CONTRACT'].includes(k.type) };
+  }
+  if (await isContract(addr)) return { type:'CONTRACT', label:'Smart Contract', note:'Unverified contract', stop:false };
+  const uniqueSenders    = new Set(txs.normal.filter(t => t.to?.toLowerCase() === laddr).map(t => t.from?.toLowerCase())).size;
+  const uniqueRecipients = new Set(txs.normal.filter(t => t.from?.toLowerCase() === laddr).map(t => t.to?.toLowerCase())).size;
+  const totalTxs = txs.normal.length + txs.erc20.length;
+  if (txs.normal.some(t => t.to?.toLowerCase().includes('tornado'))) return { type:'MIXER', label:'Mixer-connected', stop:true };
+  if (uniqueSenders > 20 && totalIn > 5 && uniqueRecipients < 10) return { type:'AGGREGATOR', label:'Aggregator / Treasury Hub', note:`${uniqueSenders} unique senders`, stop:false };
+  if (uniqueSenders > 10 && totalIn > 0.5) return { type:'INGESTION', label:'Presale Ingestion Wallet', note:`${uniqueSenders} victims`, stop:false };
+  if (totalTxs <= 20 && totalIn > 0 && totalOut > 0 && Math.abs(totalIn-totalOut) < totalIn * 0.1) return { type:'RELAY', label:'Relay / Passthrough', note:'Brief holder, swept funds', stop:false };
+  if (uniqueSenders <= 3 && uniqueRecipients > 3 && totalOut > totalIn) return { type:'OPERATOR', label:'Operator / Funder', note:`Funded ${uniqueRecipients} wallets`, stop:false };
+  return { type:'UNKNOWN', label:'Unknown Wallet', note:'Needs manual review', stop:false };
+}
+
+async function traceWallet(addr, depth, maxDepth, parentAddr = null, edgeValue = 0) {
+  if (!tracing) return;
+  const laddr = addr.toLowerCase();
+  if (visited.has(laddr)) return;
+  visited.add(laddr);
+
+  log(`Tracing ${shortAddr(addr)} (hop ${depth}/${maxDepth})...`, 'log-info');
+  document.getElementById('stat-status').textContent = `TRACING HOP ${depth}/${maxDepth} · ${nodes.size} wallets`;
+
+  const txs     = await getTxs(addr);
+  const balance = await getBalance(addr);
+
+  let totalIn = 0, totalOut = 0;
+  const inflows = [], outflows = [];
+  for (const tx of txs.normal) {
+    if (!tx.value || tx.isError === '1') continue;
+    const val = parseFloat(tx.value) / 1e18;
+    if (val < 0.001) continue;
+    if (tx.to?.toLowerCase() === laddr) { totalIn += val; inflows.push(tx); }
+    else if (tx.from?.toLowerCase() === laddr) { totalOut += val; outflows.push(tx); }
+  }
+
+  let usdtIn = 0, usdtOut = 0;
+  for (const tx of txs.erc20) {
+    if (tx.tokenSymbol !== 'USDT' && tx.tokenSymbol !== 'USDC') continue;
+    const val = parseFloat(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal) || 6);
+    if (tx.to?.toLowerCase() === laddr) usdtIn += val;
+    else if (tx.from?.toLowerCase() === laddr) usdtOut += val;
+  }
+
+  const txCount        = txs.normal.length;
+  const classification = await classifyWallet(addr, txs, inflows, outflows, totalIn, totalOut, txCount);
+  const sortedNormal   = [...txs.normal].filter(t => t.timeStamp);
+  const newestTx       = sortedNormal[0];
+  const oldestTx       = sortedNormal[sortedNormal.length - 1];
+  const toAEDT = (utcISO) => { try { return new Date(utcISO).toLocaleString('en-AU',{timeZone:'Australia/Sydney',hour12:true,timeZoneName:'short'}); } catch { return ''; } };
+  const firstTsUtc    = oldestTx ? new Date(parseInt(oldestTx.timeStamp)*1000).toISOString() : '';
+  const lastTsUtc     = newestTx ? new Date(parseInt(newestTx.timeStamp)*1000).toISOString() : '';
+  const walletAgeDays = oldestTx ? Math.floor((Date.now() - parseInt(oldestTx.timeStamp)*1000) / 86400000) : 0;
+  const apiLimitHit   = txs.normal.length >= 500;
+  const scamFlags     = [];
+  if (apiLimitHit) scamFlags.push('API_LIMIT_HIT');
+  if (walletAgeDays > 0 && walletAgeDays < 30) scamFlags.push('FRESH_WALLET');
+  if (txCount < 20 && txCount > 0) scamFlags.push('THIN_HISTORY');
+  const uniqueSendersSet = new Set(txs.normal.filter(t => t.to?.toLowerCase() === laddr).map(t => t.from?.toLowerCase()));
+  if (uniqueSendersSet.size >= 50) scamFlags.push('HIGH_VICTIM_COUNT');
+
+  const node = {
+    addr, label: classification.label, type: classification.type, note: classification.note || '',
+    hop_depth: depth, eth_in: totalIn, eth_out: totalOut, eth_balance: balance,
+    usdt_in: usdtIn, usdt_out: usdtOut,
+    combined_usd: parseFloat((((totalIn||0)*(_ethPrice||0)) + (usdtIn||0)).toFixed(2)),
+    tx_count: txCount, api_limit_hit: apiLimitHit,
+    first_tx_timestamp_utc: firstTsUtc, first_tx_timestamp_aedt: toAEDT(firstTsUtc),
+    last_tx_timestamp_utc: lastTsUtc, last_tx_timestamp_aedt: toAEDT(lastTsUtc),
+    wallet_age_days: walletAgeDays,
+    etherscan: `https://etherscan.io/address/${addr}`,
+    known_bad_wallet: false, scambuster_flags: scamFlags,
+    _depth: depth, _stop: classification.stop, _balance: balance,
+    _totalIn: totalIn, _totalOut: totalOut, _usdtIn: usdtIn, _txCount: txCount,
+  };
+  nodes.set(laddr, node);
+
+  if (parentAddr) {
+    const parentTx = txs.normal.find(t => t.from?.toLowerCase() === parentAddr.toLowerCase() && t.to?.toLowerCase() === laddr);
+    edges.push({ from: parentAddr.toLowerCase(), to: laddr, eth_value: edgeValue, block: parentTx ? parseInt(parentTx.blockNumber) : 0, hop: depth });
+  }
+
+  updateGraph(); updateStats(); updateWalletList();
+
+  log(`  → ${classification.type}: ${classification.label} | in:${totalIn.toFixed(3)}ETH out:${totalOut.toFixed(3)}ETH`,
+    classification.type === 'HOT_WALLET_KYC' ? 'log-kyc' : classification.type === 'BRIDGE' ? 'log-bridge' : classification.type === 'MIXER' ? 'log-error' : classification.type === 'AGGREGATOR' ? 'log-found' : 'log-info');
+
+  if (classification.stop || depth >= maxDepth) return;
+
+  const destMap = new Map();
+  for (const tx of outflows) {
+    if (!tx.to) continue;
+    const t = tx.to.toLowerCase();
+    if (t === laddr) continue;
+    const val = parseFloat(tx.value) / 1e18;
+    destMap.set(t, (destMap.get(t) || 0) + val);
+  }
+  const sorted = [...destMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  for (const [dest, val] of sorted) {
+    if (!tracing) break;
+    if (val < 0.01) continue;
+    if (visited.has(dest)) {
+      if (!edges.find(e => e.source === laddr && e.target === dest)) {
+        edges.push({ from: laddr, to: dest, eth_value: val, block: 0, hop: depth });
+        updateGraph();
+      }
+      continue;
+    }
+    await traceWallet(dest, depth + 1, maxDepth, addr, val);
+  }
+}
+
+// ── GRAPH ─────────────────────────────────────────────────────────────────────
+let particles = [], animFrame = null, bgCanvas, bgCtx;
+
+function initParticles() {
+  const container = document.getElementById('graph-container');
+  const existing  = document.getElementById('bg-canvas');
+  if (existing) existing.remove();
+  bgCanvas = document.createElement('canvas');
+  bgCanvas.id = 'bg-canvas';
+  bgCanvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;opacity:0.35;';
+  bgCanvas.width = container.clientWidth;
+  bgCanvas.height = container.clientHeight;
+  container.insertBefore(bgCanvas, container.firstChild);
+  bgCtx = bgCanvas.getContext('2d');
+  particles = Array.from({length:60}, () => ({
+    x: Math.random()*bgCanvas.width, y: Math.random()*bgCanvas.height,
+    r: Math.random()*1.2+0.3, vx: (Math.random()-0.5)*0.3, vy: (Math.random()-0.5)*0.3,
+    alpha: Math.random()*0.5+0.1,
+  }));
+  function drawParticles() {
+    bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = bgCanvas.width; if (p.x > bgCanvas.width) p.x = 0;
+      if (p.y < 0) p.y = bgCanvas.height; if (p.y > bgCanvas.height) p.y = 0;
+      bgCtx.beginPath(); bgCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      bgCtx.fillStyle = `rgba(0,245,196,${p.alpha})`; bgCtx.fill();
+    }
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i+1; j < particles.length; j++) {
+        const dx = particles[i].x-particles[j].x, dy = particles[i].y-particles[j].y;
+        const dist = Math.sqrt(dx*dx+dy*dy);
+        if (dist < 80) {
+          bgCtx.beginPath(); bgCtx.moveTo(particles[i].x, particles[i].y); bgCtx.lineTo(particles[j].x, particles[j].y);
+          bgCtx.strokeStyle = `rgba(0,245,196,${0.08*(1-dist/80)})`; bgCtx.lineWidth = 0.4; bgCtx.stroke();
+        }
+      }
+    }
+    animFrame = requestAnimationFrame(drawParticles);
+  }
+  if (animFrame) cancelAnimationFrame(animFrame);
+  drawParticles();
+}
+
+function hexPath(r) {
+  const a = Math.PI/3;
+  return d3.range(6).map(i => [r*Math.cos(a*i-Math.PI/6), r*Math.sin(a*i-Math.PI/6)]).map((p,i) => (i?'L':'M')+p[0].toFixed(2)+','+p[1].toFixed(2)).join('')+'Z';
+}
+
+const pulseTimers = new Map();
+function startPulse(edgeEl, color) {
+  const id = edgeEl.attr('data-id');
+  if (pulseTimers.has(id)) return;
+  let offset = Math.random();
+  const tick = () => {
+    offset = (offset+0.004)%1;
+    const x1=+edgeEl.attr('x1'),y1=+edgeEl.attr('y1'),x2=+edgeEl.attr('x2'),y2=+edgeEl.attr('y2');
+    const px=x1+(x2-x1)*offset,py=y1+(y2-y1)*offset;
+    const pulseEl = document.getElementById('pulse-'+id);
+    if (pulseEl) { pulseEl.setAttribute('cx',px); pulseEl.setAttribute('cy',py); }
+    pulseTimers.set(id, requestAnimationFrame(tick));
+  };
+  pulseTimers.set(id, requestAnimationFrame(tick));
+}
+
+function initSvg() {
+  const container = document.getElementById('graph-container');
+  const w = container.clientWidth, h = container.clientHeight;
+  initParticles();
+  d3.select('#graph-svg').selectAll('*').remove();
+  svgSel = d3.select('#graph-svg').attr('width',w).attr('height',h)
+    .call(d3.zoom().scaleExtent([0.05,6]).on('zoom',(e) => gSel.attr('transform',e.transform)));
+  const defs = svgSel.append('defs');
+  const arrowTypes = { default:'#1e3a5f', KYC:'#ff3b5c', OPERATOR:'#ff6b35', BRIDGE:'#4facfe' };
+  Object.entries(arrowTypes).forEach(([k,col]) => {
+    defs.append('marker').attr('id',`arrow-${k}`).attr('viewBox','0 -4 8 8').attr('refX',32).attr('refY',0).attr('markerWidth',5).attr('markerHeight',5).attr('orient','auto')
+      .append('path').attr('d','M0,-4L8,0L0,4').attr('fill',col).attr('opacity',0.8);
+  });
+  const glowColors = { INGESTION:'#1a8cff',AGGREGATOR:'#b44bff',HOT_WALLET_KYC:'#ff3b5c',OPERATOR:'#ff6b35',BRIDGE:'#4facfe',MIXER:'#ff3b5c',RELAY:'#3a5070',CONTRACT:'#2a3550',UNKNOWN:'#4a5570',DISPERSE:'#ffd93d' };
+  Object.entries(glowColors).forEach(([type,color]) => {
+    const f = defs.append('filter').attr('id',`glow-${type}`).attr('x','-50%').attr('y','-50%').attr('width','200%').attr('height','200%');
+    f.append('feGaussianBlur').attr('stdDeviation',type==='HOT_WALLET_KYC'||type==='OPERATOR'?'6':'3').attr('result','blur');
+    const m = f.append('feMerge');
+    m.append('feMergeNode').attr('in','blur'); m.append('feMergeNode').attr('in','blur'); m.append('feMergeNode').attr('in','SourceGraphic');
+  });
+  gSel = svgSel.append('g');
+  gSel.append('g').attr('class','pulse-layer');
+}
+
+function nodeRadius(d) {
+  if (d.depth===0) return 26; if (d.type==='HOT_WALLET_KYC') return 22;
+  if (d.type==='OPERATOR') return 20; if (d.type==='AGGREGATOR') return 18; return 14;
+}
+
+function edgeArrowType(e) {
+  const tgtKey = (typeof e.target==='string'?e.target:e.target?.id||e.target?.addr||'').toLowerCase();
+  const tgtNode = nodes.get(tgtKey);
+  if (!tgtNode) return 'default';
+  if (tgtNode.type==='HOT_WALLET_KYC') return 'KYC';
+  if (tgtNode.type==='OPERATOR') return 'OPERATOR';
+  if (tgtNode.type==='BRIDGE') return 'BRIDGE';
+  return 'default';
+}
+
+function typeAbbr(type) {
+  return { INGESTION:'INGEST',AGGREGATOR:'AGGR',DISPERSE:'DISP',BRIDGE:'BRDG',HOT_WALLET_KYC:'EXCH',MIXER:'MIX',OPERATOR:'OPER',RELAY:'RLY',CONTRACT:'CTR',UNKNOWN:'?' }[type] || '?';
+}
+
+function updateGraph() {
+  if (!gSel) return;
+  const nodeArr = [...nodes.values()].map(n => ({
+    ...n, id:(n.addr||'').toLowerCase(), depth:n.hop_depth??n._depth??0,
+    totalIn:n.eth_in??n._totalIn??0, totalOut:n.eth_out??n._totalOut??0,
+    usdtIn:n.usdt_in??n._usdtIn??0, balance:n.eth_balance??n._balance??0,
+    txCount:n.tx_count??n._txCount??0, stop:n._stop??false,
+  }));
+  const edgeArr = edges.filter(e => {
+    const sid=(e.from||(typeof e.source==='string'?e.source:e.source?.id)||'').toLowerCase();
+    const tid=(e.to||(typeof e.target==='string'?e.target:e.target?.id)||'').toLowerCase();
+    return nodes.has(sid) && nodes.has(tid);
+  }).map(e => ({ ...e, source:(e.from||e.source||'').toLowerCase(), target:(e.to||e.target||'').toLowerCase(), value:e.eth_value??e.value??0 }));
+
+  if (simulation) simulation.stop();
+  simulation = d3.forceSimulation(nodeArr)
+    .force('link', d3.forceLink(edgeArr).id(d=>d.id).distance(d => {
+      const td = nodes.get((typeof d.target==='string'?d.target:d.target?.id||d.target?.addr||'').toLowerCase());
+      return td&&(td.hop_depth??0)===0?80:110+Math.random()*20;
+    }).strength(0.4))
+    .force('charge', d3.forceManyBody().strength(d=>d.depth===0?-800:-320))
+    .force('center', d3.forceCenter(document.getElementById('graph-container').clientWidth/2, document.getElementById('graph-container').clientHeight/2))
+    .force('collision', d3.forceCollide(d=>nodeRadius(d)+18))
+    .force('radial', d3.forceRadial(d=>d.depth*130, document.getElementById('graph-container').clientWidth/2, document.getElementById('graph-container').clientHeight/2).strength(0.12));
+
+  const linkSel = gSel.selectAll('.link').data(edgeArr, d => {
+    const s=typeof d.source==='string'?d.source:d.source?.id;
+    const t=typeof d.target==='string'?d.target:d.target?.id;
+    return `${s}-${t}`;
+  });
+  linkSel.enter().append('line')
+    .attr('class', d => {
+      const val=d.value||0;
+      return val>100?'link link-neon-high':val>10?'link link-neon-mid':'link link-neon-low';
+    })
+    .attr('data-id',(d,i)=>i)
+    .attr('stroke', d => {
+      const tgt=nodes.get((typeof d.target==='string'?d.target:d.target?.id||d.target?.addr||'').toLowerCase());
+      if (!tgt) return '#0e2040';
+      if (tgt.type==='HOT_WALLET_KYC') return '#ff3b5c';
+      if (tgt.type==='BRIDGE') return '#4facfe';
+      if (tgt.type==='OPERATOR') return '#ff6b35';
+      return '#0e2a50';
+    })
+    .attr('stroke-opacity', d => {
+      const tgt=nodes.get((typeof d.target==='string'?d.target:d.target?.id||d.target?.addr||'').toLowerCase());
+      return (tgt&&['HOT_WALLET_KYC','OPERATOR','BRIDGE'].includes(tgt.type))?0.7:0.25;
+    })
+    .attr('stroke-width', d => Math.max(0.5,Math.min(3,0.5+Math.log10((d.value||0)+1)*0.8)))
+    .attr('marker-end', d=>`url(#arrow-${edgeArrowType(d)})`);
+  linkSel.exit().remove();
+
+  const linkLabelSel = gSel.selectAll('.link-label').data(edgeArr.filter(e=>(e.value||0)>0.5), d=>{
+    const s=typeof d.source==='string'?d.source:d.source?.id;
+    const t=typeof d.target==='string'?d.target:d.target?.id;
+    return `${s}-${t}`;
+  });
+  linkLabelSel.enter().append('text').attr('class','link-label').attr('fill','#1e4a7a').attr('font-size','8px').attr('font-family','Share Tech Mono, monospace').attr('text-anchor','middle').attr('pointer-events','none')
+    .text(d => { const v=d.value||0; return v>1000?`${(v/1000).toFixed(1)}kΞ`:`${v.toFixed(1)}Ξ`; });
+  linkLabelSel.exit().remove();
+
+  const pulseLayer = gSel.select('.pulse-layer');
+  edgeArr.forEach((d,i) => {
+    const tgt=nodes.get((typeof d.target==='string'?d.target:d.target?.id||d.target?.addr||'').toLowerCase());
+    const isHot=tgt&&['HOT_WALLET_KYC','OPERATOR','AGGREGATOR'].includes(tgt.type);
+    if (!isHot) return;
+    const pulseId='pulse-'+i;
+    if (!document.getElementById(pulseId)) {
+      const color=tgt.type==='HOT_WALLET_KYC'?'#ff3b5c':tgt.type==='OPERATOR'?'#ff6b35':'#00f5c4';
+      pulseLayer.append('circle').attr('id',pulseId).attr('r',2.5).attr('fill',color).attr('opacity',0.9).attr('filter',`url(#glow-${tgt.type})`);
+    }
+  });
+
+  const nodeSel = gSel.selectAll('.node-g').data(nodeArr, d=>d.id);
+  nodeSel.exit().remove();
+  const nodeEnter = nodeSel.enter().append('g').attr('class','node-g').style('cursor','pointer')
+    .call(d3.drag()
+      .on('start',(e,d)=>{ if(!e.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag',(e,d)=>{ d.fx=e.x; d.fy=e.y; })
+      .on('end',(e,d)=>{ if(!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }))
+    .on('click',(e,d)=>showDetail(d))
+    .on('mouseover',(e,d)=>{ showTooltip(e,d); highlightConnected(d); })
+    .on('mousemove',(e)=>moveTooltip(e))
+    .on('mouseout',()=>{ hideTooltip(); resetHighlight(); });
+
+  nodeEnter.append('circle').attr('class','node-glow').attr('r',d=>nodeRadius(d)+10).attr('fill','none')
+    .attr('stroke',d=>TYPE_COLOR[d.type]||'#3a4060').attr('stroke-width',0.5)
+    .attr('stroke-opacity',d=>['HOT_WALLET_KYC','OPERATOR'].includes(d.type)?0.4:0.12)
+    .attr('filter',d=>`url(#glow-${d.type})`);
+  nodeEnter.append('circle').attr('r',d=>nodeRadius(d)+5).attr('fill','none')
+    .attr('stroke',d=>TYPE_COLOR[d.type]||'#3a4060').attr('stroke-width',0.5)
+    .attr('stroke-opacity',d=>['HOT_WALLET_KYC','OPERATOR'].includes(d.type)?0.3:0.08);
+  nodeEnter.append('path').attr('class','node-hex').attr('d',d=>hexPath(nodeRadius(d)))
+    .attr('fill',d=>(TYPE_COLOR[d.type]||'#3a4060')+'18').attr('stroke',d=>TYPE_COLOR[d.type]||'#3a4060')
+    .attr('stroke-width',d=>d.depth===0?2.5:['HOT_WALLET_KYC','OPERATOR'].includes(d.type)?2:1)
+    .attr('stroke-opacity',d=>['HOT_WALLET_KYC','OPERATOR'].includes(d.type)?1:0.6)
+    .attr('filter',d=>['HOT_WALLET_KYC','OPERATOR','AGGREGATOR'].includes(d.type)?`url(#glow-${d.type})`:null);
+  nodeEnter.filter(d=>['HOT_WALLET_KYC','OPERATOR'].includes(d.type)).append('path').attr('d',d=>hexPath(nodeRadius(d)*0.55)).attr('fill',d=>(TYPE_COLOR[d.type]||'#3a4060')+'30').attr('stroke','none');
+  nodeEnter.append('text').attr('text-anchor','middle').attr('dy',d=>d.type==='HOT_WALLET_KYC'?'-0.1em':'0.35em')
+    .attr('fill',d=>TYPE_COLOR[d.type]||'#3a4060').attr('font-size',d=>d.depth===0?'13px':['HOT_WALLET_KYC','OPERATOR'].includes(d.type)?'11px':'9px')
+    .attr('font-family','Share Tech Mono, monospace').attr('font-weight','bold').attr('pointer-events','none').text(d=>typeAbbr(d.type));
+  nodeEnter.filter(d=>d.type==='HOT_WALLET_KYC').append('text').attr('text-anchor','middle').attr('dy','1.1em')
+    .attr('fill','#ff3b5c').attr('font-size','7px').attr('font-family','Share Tech Mono, monospace').attr('pointer-events','none').text('KYC');
+  nodeEnter.filter(d=>d.type==='HOT_WALLET_KYC').append('circle').attr('class','kyc-pulse-ring').attr('r',30).attr('fill','none').attr('stroke','#ff3b5c').attr('stroke-width',2).attr('pointer-events','none');
+  nodeEnter.append('text').attr('class','node-label').attr('text-anchor','middle').attr('dy',d=>(nodeRadius(d)+14)+'px')
+    .attr('fill',d=>['HOT_WALLET_KYC','OPERATOR'].includes(d.type)?TYPE_COLOR[d.type]:'#2a4060')
+    .attr('font-size',d=>['HOT_WALLET_KYC','OPERATOR'].includes(d.type)?'9px':'8px').attr('font-family','Share Tech Mono, monospace').attr('pointer-events','none').text(d=>shortAddr(d.addr));
+  nodeEnter.filter(d=>d.depth===0).append('circle').attr('r',42).attr('fill','none').attr('stroke','#00f5c4').attr('stroke-width',0.5).attr('stroke-dasharray','3,4').attr('stroke-opacity',0.25).attr('class','origin-ring');
+
+  simulation.on('tick', () => {
+    gSel.selectAll('.link').attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    gSel.selectAll('.link-label').attr('x',d=>(d.source.x+d.target.x)/2).attr('y',d=>(d.source.y+d.target.y)/2-4);
+    gSel.selectAll('.node-g').attr('transform',d=>`translate(${d.x},${d.y})`);
+  });
+
+  edgeArr.forEach((d,i) => {
+    const tgt=nodes.get((typeof d.target==='string'?d.target:d.target?.id||d.target?.addr||'').toLowerCase());
+    if (tgt&&['HOT_WALLET_KYC','OPERATOR','AGGREGATOR'].includes(tgt.type)) {
+      const edgeEl=gSel.selectAll('.link').filter((ed,idx)=>idx===i);
+      if (!edgeEl.empty()) { edgeEl.attr('data-id',i); setTimeout(()=>startPulse(edgeEl,TYPE_COLOR[tgt.type]),i*120); }
+    }
+  });
+}
+
+function highlightConnected(d) {
+  const connectedIds = new Set([d.id]);
+  edges.forEach(e => {
+    const s=e.from||(typeof e.source==='string'?e.source:e.source?.id);
+    const t=e.to||(typeof e.target==='string'?e.target:e.target?.id);
+    if (s===d.addr?.toLowerCase()) connectedIds.add(t);
+    if (t===d.addr?.toLowerCase()) connectedIds.add(s);
+  });
+  gSel.selectAll('.node-g').attr('opacity',nd=>connectedIds.has(nd.id||nd.addr?.toLowerCase())?1:0.2);
+  gSel.selectAll('.link').attr('opacity',e=>{
+    const s=e.from||(typeof e.source==='string'?e.source:e.source?.id);
+    const t=e.to||(typeof e.target==='string'?e.target:e.target?.id);
+    return (s===d.addr?.toLowerCase()||t===d.addr?.toLowerCase())?1:0.05;
+  });
+}
+function resetHighlight() { gSel.selectAll('.node-g').attr('opacity',1); gSel.selectAll('.link').attr('opacity',1); }
+
+function highlightPath(nodeId) {
+  if (!gSel) return;
+  const id=(nodeId||'').toLowerCase();
+  const pathIds=new Set([id]); const pathEdges=new Set();
+  let frontier=[id], safety=0;
+  while (frontier.length&&safety++<200) {
+    const next=[];
+    for (const cur of frontier) {
+      for (const e of edges) {
+        const s=typeof e.source==='string'?e.source:e.source?.id;
+        const t=typeof e.target==='string'?e.target:e.target?.id;
+        if (t===cur&&!pathIds.has(s)) { pathIds.add(s); pathEdges.add(s+'->'+t); next.push(s); }
+      }
+    }
+    frontier=next;
+  }
+  frontier=[id]; safety=0;
+  while (frontier.length&&safety++<200) {
+    const next=[];
+    for (const cur of frontier) {
+      for (const e of edges) {
+        const s=typeof e.source==='string'?e.source:e.source?.id;
+        const t=typeof e.target==='string'?e.target:e.target?.id;
+        if (s===cur&&!pathIds.has(t)) {
+          const tNode=nodes.get(t);
+          if (tNode&&['HOT_WALLET_KYC','MIXER','BRIDGE'].includes(tNode.type)) { pathIds.add(t); pathEdges.add(s+'->'+t); next.push(t); }
+        }
+      }
+    }
+    frontier=next;
+  }
+  gSel.selectAll('.node-g').classed('path-active',nd=>pathIds.has(nd.id)).classed('path-dimmed',nd=>!pathIds.has(nd.id));
+  gSel.selectAll('.link').classed('path-active',e=>{
+    const s=typeof e.source==='string'?e.source:e.source?.id;
+    const t=typeof e.target==='string'?e.target:e.target?.id;
+    return pathEdges.has(s+'->'+t);
+  }).classed('path-dimmed',e=>{
+    const s=typeof e.source==='string'?e.source:e.source?.id;
+    const t=typeof e.target==='string'?e.target:e.target?.id;
+    return !pathEdges.has(s+'->'+t);
+  });
+  log(`Path highlighted — ${pathIds.size} wallets in chain`, 'log-found');
+}
+function resetPathHighlight() { if (!gSel) return; gSel.selectAll('.node-g').classed('path-active',false).classed('path-dimmed',false); gSel.selectAll('.link').classed('path-active',false).classed('path-dimmed',false); }
+
+function showTooltip(e,d) {
+  const t=document.getElementById('tooltip');
+  t.innerHTML=`<strong style="color:${TYPE_COLOR[d.type]}">${d.type}</strong><br>${d.label}<br><span style="color:var(--text-dim);font-size:9px">${d.addr}</span>`;
+  t.classList.add('visible'); moveTooltip(e);
+}
+function moveTooltip(e) { const t=document.getElementById('tooltip'); t.style.left=(e.offsetX+12)+'px'; t.style.top=(e.offsetY-10)+'px'; }
+function hideTooltip() { document.getElementById('tooltip').classList.remove('visible'); }
+
+function showDetail(d) {
+  window._lastDetailNode = d;
+  switchTab('detail');
+  const color=TYPE_COLOR[d.type]||'#3a4060';
+  const ep=getEthPrice();
+  const _bal=parseFloat(d.eth_balance??d.balance??0);
+  const _in=parseFloat(d.eth_in??d.totalIn??0);
+  const _out=parseFloat(d.eth_out??d.totalOut??0);
+  const _usdtIn=parseFloat(d.usdt_in??d.usdtIn??0);
+  const _usdtOut=parseFloat(d.usdt_out??d.usdtOut??0);
+  const _txCount=d.tx_count??d.txCount??0;
+  const _depth=d.hop_depth??d.depth??0;
+  const usdIn=ep?`<span style="color:var(--text-dim);font-size:10px"> = $${Math.round(_in*ep).toLocaleString()}</span>`:'';
+  const usdOut=ep?`<span style="color:var(--text-dim);font-size:10px"> = $${Math.round(_out*ep).toLocaleString()}</span>`:'';
+  document.getElementById('tab-detail').innerHTML = `
+    <div class="node-detail">
+      <div class="addr">${d.addr} <button class="copy-btn" onclick="copyFlash('${d.addr}')">COPY</button></div>
+      <div class="tag" style="background:${color}22;color:${color};border:1px solid ${color}44">${d.type}</div>
+      <div class="detail-row"><span class="label">Label</span><span class="value">${d.label}</span></div>
+      <div class="detail-row"><span class="label">Note</span><span class="value">${d.note||'—'}</span></div>
+      <div class="detail-row"><span class="label">Depth</span><span class="value">Hop ${_depth}</span></div>
+      <div class="detail-row"><span class="label">ETH Balance</span><span class="value">${_bal.toFixed(4)} ETH</span></div>
+      <div class="detail-row"><span class="label">Total In (ETH)</span><span class="value">${_in.toFixed(4)} ETH${usdIn}</span></div>
+      <div class="detail-row"><span class="label">Total Out (ETH)</span><span class="value">${_out.toFixed(4)} ETH${usdOut}</span></div>
+      ${_usdtIn>0?`<div class="detail-row"><span class="label">USDT In</span><span class="value">$${_usdtIn.toFixed(2)}</span></div>`:''}
+      ${_usdtOut>0?`<div class="detail-row"><span class="label">USDT Out</span><span class="value">$${_usdtOut.toFixed(2)}</span></div>`:''}
+      <div class="detail-row"><span class="label">Tx Count</span><span class="value">${_txCount}</span></div>
+      <div style="margin-top:10px">
+        <a href="https://etherscan.io/address/${d.addr}" target="_blank" style="color:var(--accent);font-size:10px;text-decoration:none">→ VIEW ON ETHERSCAN</a>
+      </div>
+      <div style="margin-top:8px">
+        <button class="copy-btn" style="font-size:10px;padding:4px 10px" onclick="highlightPath('${d.addr}')">⬡ HIGHLIGHT PATH</button>
+        <button class="copy-btn" style="font-size:10px;padding:4px 10px;margin-left:6px" onclick="resetPathHighlight()">RESET</button>
+      </div>
+      ${d.type==='HOT_WALLET_KYC'?`<div style="margin-top:8px;padding:8px;background:#ff6b3511;border:1px solid #ff6b3544;border-radius:4px;font-size:10px;color:#ff6b35">⚠ SUBPOENA TARGET — KYC data available from exchange</div>`:''}
+      ${d.type==='MIXER'?`<div style="margin-top:8px;padding:8px;background:#ff3b5c11;border:1px solid #ff3b5c44;border-radius:4px;font-size:10px;color:#ff3b5c">🚨 MIXER — Intentional obfuscation detected</div>`:''}
+      ${d.type==='BRIDGE'?`<div style="margin-top:8px;padding:8px;background:#4facfe11;border:1px solid #4facfe44;border-radius:4px;font-size:10px;color:#4facfe">⇌ CROSS-CHAIN — Funds moved to another blockchain.</div>`:''}
+    </div>`;
+}
+
+function updateWalletList() {
+  const list = document.getElementById('wallet-list');
+  const arr  = [...nodes.values()].sort((a,b)=>a.depth-b.depth);
+  list.innerHTML = arr.map(n => {
+    const color=TYPE_COLOR[n.type]||'#3a4060';
+    const ep=getEthPrice();
+    const _ni=parseFloat(n.eth_in??n.totalIn??0);
+    const _nd=n.hop_depth??n.depth??0;
+    const usd=ep?` · $${Math.round(_ni*ep).toLocaleString()}`:'';
+    return `<div class="wallet-item" onclick="showDetail(${JSON.stringify(n).replace(/"/g,'&quot;')})">
+      <div class="wi-addr" style="display:flex;justify-content:space-between;align-items:center">
+        <span style="word-break:break-all;flex:1">${n.addr}</span>
+        <button class="copy-btn" onclick="event.stopPropagation();copyFlash('${n.addr}')">COPY</button>
+      </div>
+      <div class="wi-row"><span style="color:${color}">${n.type}</span><span>${_ni.toFixed(3)}Ξ${usd}</span></div>
+      <div class="wi-row" style="margin-top:2px"><span style="color:var(--text-dim)">${n.label}</span><span>hop ${_nd}</span></div>
+    </div>`;
+  }).join('');
+}
+
+let _prevStats = {};
+function animateStat(id,val) {
+  const el=document.getElementById(id); if (!el) return;
+  if (_prevStats[id]!==val) { el.textContent=val; el.classList.add('bump'); setTimeout(()=>el.classList.remove('bump'),400); _prevStats[id]=val; }
+}
+function updateStats() {
+  const nodeArr=[...nodes.values()].map(n=>({...n,depth:n.hop_depth??n._depth??0,totalIn:n.eth_in??n._totalIn??0,usdtIn:n.usdt_in??n._usdtIn??0}));
+  const ep=getEthPrice();
+  const totalETH=nodeArr.reduce((s,n)=>s+(parseFloat(n.eth_in??n.totalIn??0)||0),0);
+  const totalUSD=ep?(totalETH*ep)+nodeArr.reduce((s,n)=>s+(n.usdtIn||0),0):0;
+  animateStat('stat-nodes',nodes.size); animateStat('stat-edges',edges.length);
+  animateStat('stat-kyc',nodeArr.filter(n=>n.type==='HOT_WALLET_KYC').length);
+  animateStat('stat-bridges',nodeArr.filter(n=>n.type==='BRIDGE').length);
+  animateStat('stat-eth',totalETH.toFixed(3));
+  animateStat('stat-usd',ep?'$'+Math.round(totalUSD).toLocaleString():'—');
+}
+
+async function exportResults() {
+  const rawNodes=[...nodes.values()];
+  if (rawNodes.length===0) { log('Nothing to export — run a trace first','log-warn'); return; }
+  const STRIP=new Set(['x','y','vx','vy','fx','fy','index','_depth','_stop','_balance','_totalIn','_totalOut','_usdtIn','_txCount']);
+  const rawCleanNodes=rawNodes.map(n=>{const out={};for(const[k,v]of Object.entries(n)){if(!STRIP.has(k))out[k]=v;}return out;});
+  const rawCleanEdges=edges.map(e=>({ from:e.from||(typeof e.source==='string'?e.source:e.source?.addr||e.source?.id||''), to:e.to||(typeof e.target==='string'?e.target:e.target?.addr||e.target?.id||''), eth_value:e.eth_value??e.value??0, block:e.block||0, hop:e.hop??0 }));
+  const payload={_raw:true, seed_address:document.getElementById('addr-input').value.trim()||(rawNodes[0]?.addr||'unknown'), project_name:document.getElementById('project-name').value.trim(), trace_depth:parseInt(document.getElementById('depth-select').value)||7, eth_price_usd:_ethPrice||0, nodes:rawCleanNodes, edges:rawCleanEdges};
+  log('Sending trace to server...','log-info');
+  try {
+    const response=await fetch('/save-trace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload,null,2)});
+    const result=await response.json();
+    if (result.ok) {
+      log(`JSON saved  → ${result.json}`,'log-found');
+      log(`Report saved → ${result.docx}`,'log-found');
+      log('✓ All files saved.','log-found');
+    } else { log(`Server error: ${result.error||'Unknown'}`, 'log-error'); }
+  } catch(err) { log(`Export failed: ${err.message}`,'log-error'); }
+}
+
+function exportPNG() {
+  if (!svgSel) { log('Nothing to export — run a trace first','log-warn'); return; }
+  const svgEl=document.getElementById('graph-svg');
+  const w=svgEl.clientWidth||1400, h=svgEl.clientHeight||900, scale=3;
+  const addr=document.getElementById('addr-input').value.trim()||'trace';
+  const ts=new Date().toLocaleString('en-AU',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).replace(/[/,: ]+/g,m=>m===' '?'_':'-');
+  const project=document.getElementById('project-name').value.trim().replace(/\s+/g,'-')||'';
+  const filename=project?`neuraltrace_${project}_${addr}_${ts}.png`:`neuraltrace_${addr}_${ts}.png`;
+  const clone=svgEl.cloneNode(true);
+  clone.setAttribute('width',w); clone.setAttribute('height',h); clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  const bg=document.createElementNS('http://www.w3.org/2000/svg','rect'); bg.setAttribute('width',w); bg.setAttribute('height',h); bg.setAttribute('fill','#050810'); clone.insertBefore(bg,clone.firstChild);
+  const style=document.createElementNS('http://www.w3.org/2000/svg','style'); style.textContent=`text{font-family:'Courier New',monospace;}`; clone.insertBefore(style,clone.firstChild);
+  const serializer=new XMLSerializer();
+  const blob=new Blob([serializer.serializeToString(clone)],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const canvas=document.createElement('canvas'); canvas.width=w*scale; canvas.height=h*scale;
+  const ctx=canvas.getContext('2d'); ctx.scale(scale,scale); ctx.fillStyle='#050810'; ctx.fillRect(0,0,w,h);
+  const img=new Image(); img.crossOrigin='anonymous';
+  img.onload=()=>{
+    ctx.drawImage(img,0,0,w,h); URL.revokeObjectURL(url);
+
+    // ── Bottom-right caption ──────────────────────────────────────────────────
+    const originNode   = [...nodes.values()].find(n => (n.hop_depth ?? n.depth ?? 0) === 0);
+    const captionAddr  = addr || '';
+    const captionLabel = originNode ? `${originNode.type} — ${originNode.label || ''}` : '';
+    const captionProj  = document.getElementById('project-name').value.trim();
+    const captionTime  = new Date().toLocaleString('en-AU', {
+      timeZone: 'Australia/Sydney', hour12: true,
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
+    });
+
+    ctx.save();
+    ctx.font = '11px "Courier New", monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+
+    const lines = [captionAddr, captionLabel, captionProj, captionTime].filter(Boolean);
+    const lineH = 15;
+    const maxW  = Math.max(...lines.map(l => ctx.measureText(l).width));
+    const padX  = 10, padY = 8;
+    const boxH  = lines.length * lineH + padY * 2;
+    const boxW  = maxW + padX * 2;
+    const bx    = w - 12;
+    const by    = h - 12;
+
+    ctx.fillStyle = 'rgba(5,8,16,0.72)';
+    ctx.beginPath();
+    ctx.roundRect(bx - boxW, by - boxH, boxW, boxH, 4);
+    ctx.fill();
+
+    lines.reverse().forEach((line, i) => {
+      const isAddr = line.startsWith('0x');
+      ctx.fillStyle = isAddr ? '#00f5c4' : i === 0 ? '#5a6890' : '#c8d4f0';
+      ctx.fillText(line, bx - padX, by - padY - i * lineH);
+    });
+    ctx.restore();
+    // ─────────────────────────────────────────────────────────────────────────
+
+    canvas.toBlob(pngBlob=>{
+      const a=document.createElement('a'); a.href=URL.createObjectURL(pngBlob); a.download=filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+      log(`PNG exported — ${filename}`,'log-found');
+    },'image/png',1.0);
+  };
+  img.onerror=()=>{ URL.revokeObjectURL(url); log('PNG render failed','log-warn'); };
+  img.src=url;
+}
+
+async function toggleHistory() {
+  const panel=document.getElementById('history-panel');
+  const isOpen=panel.classList.contains('open');
+  if (isOpen) { panel.classList.remove('open'); return; }
+  panel.classList.add('open'); await loadHistory();
+}
+
+async function loadHistory() {
+  const list=document.getElementById('history-list');
+  try {
+    const res=await fetch('/list-traces'); const data=await res.json();
+    if (!data.files||data.files.length===0) { list.innerHTML='<div style="color:var(--text-dim);padding:20px;text-align:center;font-size:10px">No saved traces yet</div>'; return; }
+    list.innerHTML=data.files.map(f=>`<div class="history-item" onclick="loadTrace('${f.file}')"><div class="h-addr">${f.origin||f.file}</div><div class="h-meta">${f.wallets||'?'} wallets · ${f.kyc||0} KYC · ${f.date||''}</div></div>`).join('');
+  } catch(e) { list.innerHTML='<div style="color:var(--text-dim);padding:20px;text-align:center;font-size:10px">Server not running</div>'; }
+}
+
+async function loadTrace(filename) {
+  try {
+    const res=await fetch('/load-trace/'+encodeURIComponent(filename)); const data=await res.json();
+    if (!data.ok) { log('Failed to load trace: '+data.error,'log-error'); return; }
+    const trace=data.trace; nodes.clear(); edges=[]; visited.clear();
+    (trace.nodes||[]).forEach(n=>nodes.set((n.addr||n.id||'').toLowerCase(),n));
+    edges=trace.edges||[];
+    document.getElementById('addr-input').value=trace.meta?.seed_address||'';
+    document.getElementById('empty-state').style.display='none';
+    document.getElementById('legend').style.display='block';
+    document.getElementById('stat-status').textContent='LOADED';
+    initSvg(); updateGraph(); updateStats(); updateWalletList(); switchTab('wallets');
+    document.getElementById('history-panel').classList.remove('open');
+    log(`Loaded trace: ${trace.meta?.seed_address} — ${nodes.size} wallets`,'log-found');
+  } catch(e) { log('Load failed: '+e.message,'log-error'); }
+}
+
+async function startTrace() {
+  const addr=document.getElementById('addr-input').value.trim();
+  if (!addr||!addr.startsWith('0x')||addr.length!==42) { log('Invalid address','log-error'); return; }
+  const depth=parseInt(document.getElementById('depth-select').value);
+  nodes.clear(); edges=[]; visited.clear(); tracing=true;
+  document.getElementById('empty-state').style.display='none';
+  document.getElementById('legend').style.display='block';
+  document.getElementById('trace-btn').disabled=true;
+  document.getElementById('stat-status').textContent='TRACING';
+  document.getElementById('progress').classList.add('indeterminate');
+  initSvg(); switchTab('log');
+  log(`Starting trace from ${addr}`,'log-found'); log(`Max depth: ${depth} hops`,'log-info');
+  try {
+    await traceWallet(addr,0,depth);
+    log(`Trace complete — ${nodes.size} wallets found`,'log-found');
+    document.getElementById('stat-status').textContent='COMPLETE';
+  } catch(e) { log(`Error: ${e.message}`,'log-error'); document.getElementById('stat-status').textContent='ERROR'; }
+  tracing=false;
+  document.getElementById('trace-btn').disabled=false;
+  document.getElementById('progress').classList.remove('indeterminate');
+  document.getElementById('progress').style.width='100%';
+  setTimeout(()=>document.getElementById('progress').style.width='0',1500);
+  switchTab('wallets'); updateWalletList();
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i)=>{ const names=['detail','wallets','log']; t.classList.toggle('active',names[i]===name); });
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+document.getElementById('addr-input').addEventListener('keydown', e => { if (e.key==='Enter') startTrace(); });
+document.getElementById('ori-addr-input').addEventListener('input', e => {
+  const val = e.target.value.trim();
+  const valid = val.startsWith('0x') && val.length === 42;
+  if (valid) {
+    document.getElementById('ori-run-btn').disabled = false;
+    document.getElementById('ori-file-label').textContent = 'Single address mode';
+  } else if (!_oriTraceData) {
+    document.getElementById('ori-run-btn').disabled = true;
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MONITOR (Page 2)
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _monTraceData = null;
+let _monResult    = null;
+let _oriResult    = null;
+
+async function exportMonitor() {
+  if (!_monResult) { monLog('Nothing to export — run monitor first', 'error'); return; }
+  document.getElementById('mon-export-btn').disabled = true;
+  monLog('Exporting...');
+  try {
+    const res  = await fetch('/export-monitor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_monResult),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      monLog(`✓ JSON saved → ${data.json}`);
+      monLog(`✓ DOCX saved → ${data.docx}`);
+    } else {
+      monLog('Export failed: ' + data.error, 'error');
+    }
+  } catch(e) {
+    monLog('Export error: ' + e.message, 'error');
+  }
+  document.getElementById('mon-export-btn').disabled = false;
+}
+
+async function exportOrigin() {
+  if (!_oriResult) { oriLog('Nothing to export — run origin trace first', 'error'); return; }
+  document.getElementById('ori-export-btn').disabled = true;
+  oriLog('Exporting...');
+  try {
+    const res  = await fetch('/export-origin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_oriResult),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      oriLog(`✓ JSON saved → ${data.json}`);
+      oriLog(`✓ DOCX saved → ${data.docx}`);
+    } else {
+      oriLog('Export failed: ' + data.error, 'error');
+    }
+  } catch(e) {
+    oriLog('Export error: ' + e.message, 'error');
+  }
+  document.getElementById('ori-export-btn').disabled = false;
+}
+
+async function loadTraceList(targetId, onSelectFn) {
+  try {
+    const res  = await fetch('/list-traces');
+    const data = await res.json();
+    const files = data.files || [];
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    el.innerHTML = files.length === 0
+      ? '<div style="color:var(--text-dim);font-size:11px;padding:20px;text-align:center">No saved traces found — run a trace first from the Trace tab</div>'
+      : files.map(f => `
+          <div class="wallet-item" onclick="${onSelectFn}('${f.file}')" style="cursor:pointer">
+            <div class="wi-addr">${f.origin || f.file}</div>
+            <div class="wi-row">
+              <span style="color:var(--accent)">${f.project || '—'}</span>
+              <span>${f.wallets || '?'} wallets · ${f.kyc || 0} KYC</span>
+            </div>
+            <div class="wi-row" style="margin-top:2px">
+              <span style="color:var(--text-dim)">${f.date || ''}</span>
+              <span style="color:var(--text-dim)">${f.hops || '?'} hops</span>
+            </div>
+          </div>`).join('');
+  } catch(e) {
+    const el = document.getElementById(targetId);
+    if (el) el.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:20px;text-align:center">Server not running</div>';
+  }
+}
+
+async function monSelectTrace(filename) {
+  try {
+    const res  = await fetch('/load-trace/' + encodeURIComponent(filename));
+    const data = await res.json();
+    if (!data.ok) { monLog('Failed to load: ' + data.error, 'error'); return; }
+    _monTraceData = data.trace;
+    const count = (_monTraceData.nodes||[]).filter(n=>!['HOT_WALLET_KYC','MIXER','BRIDGE'].includes(n.type)).length;
+    document.getElementById('mon-file-label').textContent = `${_monTraceData.meta?.project_name || filename} — ${count} wallets`;
+    document.getElementById('mon-run-btn').disabled = false;
+    document.getElementById('mon-trace-list').style.display = 'none';
+    document.getElementById('mon-terminal').textContent = '';
+    document.getElementById('mon-results').style.display = 'block';
+    monLog(`Loaded: ${filename} — ${count} wallet(s) to monitor`);
+  } catch(e) {
+    monLog('Load error: ' + e.message, 'error');
+  }
+}
+
+async function runMonitor() {
+  if (!_monTraceData) { monLog('Load a Neural Trace JSON first', 'error'); return; }
+
+  const window = document.getElementById('mon-window').value;
+  document.getElementById('mon-run-btn').disabled = true;
+  document.getElementById('mon-progress').classList.add('indeterminate');
+
+  // Hide trace list, show results area immediately
+  document.getElementById('mon-trace-list').style.display = 'none';
+  document.getElementById('mon-terminal').textContent = '';
+  document.getElementById('mon-saved').style.display = 'none';
+  document.getElementById('mon-results').style.display = 'block';
+
+  monTerminal('═'.repeat(64));
+  monTerminal(`  NEURAL TRACE — MONITOR`);
+  monTerminal(`  Window  : ${window === '7d' ? '7 Days' : '48 Hours'}`);
+  monTerminal(`  Project : ${_monTraceData.meta?.project_name || 'Unknown'}`);
+  monTerminal('═'.repeat(64));
+  monTerminal('');
+
+  monLog(`Starting monitor — window: ${window}`);
+  monLog(`Project: ${_monTraceData.meta?.project_name || 'Unknown'}`);
+
+  try {
+    const response = await fetch('/monitor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trace_data: _monTraceData, window }),
+    });
+
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+    // Read SSE stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const msg = JSON.parse(line.slice(6));
+          if (msg.type === 'log') {
+            monLog(msg.msg, msg.level === 'warn' ? 'warn' : msg.level === 'error' ? 'error' : 'info');
+          } else if (msg.type === 'done') {
+            result = msg;
+            monLog('Monitor complete ✓ — click EXPORT REPORT to save files', 'info');
+            _monResult = result.result;
+            renderMonitorResults(result.result);
+            document.getElementById('mon-export-btn').disabled = false;
+          } else if (msg.type === 'error') {
+            monLog('Error: ' + msg.msg, 'error');
+          }
+        } catch(e) {}
+      }
+    }
+
+    if (!result) {
+      monLog('No result received', 'error');
+    }
+
+  } catch(err) {
+    monLog('Monitor failed: ' + err.message, 'error');
+  }
+
+  document.getElementById('mon-run-btn').disabled = false;
+  document.getElementById('mon-progress').classList.remove('indeterminate');
+}
+
+function monTerminal(line, color) {
+  const el = document.getElementById('mon-terminal');
+  if (!el) return;
+  const span = document.createElement('span');
+  if (color) span.style.color = color;
+  span.textContent = line + '\n';
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderMonitorResults(data) {
+  const bt     = data.batch_totals || {};
+  const spikes = data.spikes || [];
+  const struct = data.structuring || [];
+  const sudden = data.sudden_activations || [];
+  const ops    = data.likely_operators || [];
+  const meta   = data.meta || {};
+  const wallets= (data.wallets||[]);
+  const active = wallets.filter(w=>w.total_in_usd>0||w.total_out_usd>0);
+  const inactive = wallets.filter(w=>w.total_in_usd===0&&w.total_out_usd===0);
+
+  const T = (l, c) => monTerminal(l, c);
+  const SEP  = '─'.repeat(64);
+  const SEP2 = '═'.repeat(64);
+
+  // ── BATCH SUMMARY ────────────────────────────────────────────────────────
+  T('');
+  T(SEP2);
+  T('  BATCH TOTALS');
+  T(SEP);
+  T(`  Wallets     : ${meta.wallets_scanned||0} total  |  ${bt.wallets_active||0} active`);
+  T(`  Total IN    : ${fmtUSD(bt.total_in_usd)}`);
+  T(`  Total OUT   : ${fmtUSD(bt.total_out_usd)}`);
+  T(`  ETH in      : ${fmtETH(bt.total_eth_in)}`);
+  T(`  USDT in     : ${fmtUSD(bt.total_usdt_in)}`);
+  T(`  Spikes      : ${spikes.length} tx(s) above $50,000`);
+  T(`  Structuring : ${struct.length} pattern(s)`);
+  T(`  Dormancy    : ${sudden.length} sudden activation(s)`);
+  T(`  Gas Ops     : ${ops.length} likely operator(s)`);
+
+  // ── WALLETS SCANNED ───────────────────────────────────────────────────────
+  T('');
+  T(SEP2);
+  T(`  WALLETS SCANNED (${wallets.length})`);
+  T(SEP);
+  wallets.forEach((w, i) => {
+    const num   = String(i + 1).padStart(2, '0');
+    const inUsd = fmtUSD(w.total_in_usd).padStart(14);
+    const flag  = w.spike_count > 0 ? '  *** SPIKE x' + w.spike_count : '';
+    T(`  [${num}] ${w.label}${flag}`, w.spike_count > 0 ? 'var(--red)' : null);
+    T(`        ${w.address}`);
+    T(`        IN: ${inUsd}   TXs: ${(w.tx_count_normal||0)+(w.tx_count_usdt||0)}`);
+  });
+
+  // ── SPIKES ────────────────────────────────────────────────────────────────
+  if (spikes.length > 0) {
+    T('');
+    T(SEP2);
+    T(`  SPIKES > $50,000  (${spikes.length} tx(s))`, 'var(--red)');
+    T(SEP);
+    spikes.forEach(s => {
+      const dt  = new Date((s.timestamp||0)*1000).toISOString().slice(0,16).replace('T',' ') + ' UTC';
+      const amt = s.token==='ETH'
+        ? `${fmtETH(s.amount_eth)} (${fmtUSD(s.amount_usd)})`
+        : `${fmtUSD(s.amount_usd)} USDT`;
+      T(`  ${s.wallet_label}`, 'var(--yellow)');
+      T(`  ${s.wallet}`);
+      T(`    Amount : ${amt}`, 'var(--red)');
+      T(`    From   : ${s.from||'—'}`);
+      T(`    Token  : ${s.token}   Time: ${dt}`);
+      T(`    TX     : ${s.hash||'—'}`);
+      T(SEP);
+    });
+  }
+
+  // ── STRUCTURING ───────────────────────────────────────────────────────────
+  if (struct.length > 0) {
+    T('');
+    T(SEP2);
+    T(`  STRUCTURING ALERTS (${struct.length})`, 'var(--yellow)');
+    T(SEP);
+    struct.forEach(a => {
+      T(`  ${a.wallet_label}`, 'var(--yellow)');
+      T(`  ${a.wallet}`);
+      T(`    ${a.tx_count} txs from ${a.sender}`);
+      T(`    Total: ${fmtUSD(a.total_usd)}  Avg: ${fmtUSD(a.avg_usd)}`);
+      T(`    Window: ${a.window_start} → ${a.window_end}  (${a.window_hours}h)`);
+      T(SEP);
+    });
+  }
+
+  // ── DORMANCY ──────────────────────────────────────────────────────────────
+  if (sudden.length > 0) {
+    T('');
+    T(SEP2);
+    T(`  SUDDEN ACTIVATIONS (${sudden.length})`, 'var(--yellow)');
+    T(SEP);
+    sudden.forEach(d => {
+      T(`  ${d.label}`, 'var(--yellow)');
+      T(`  ${d.address}`);
+      T(`    Dormant    : ${d.dormancy_days} days`);
+      T(`    Last active: ${d.last_pre_window_date||'—'}`);
+      T(`    First tx   : ${d.first_tx_date||'—'}`);
+      T(SEP);
+    });
+  }
+
+  // ── GAS MAP ───────────────────────────────────────────────────────────────
+  if (ops.length > 0) {
+    T('');
+    T(SEP2);
+    T(`  GAS FUNDING — LIKELY OPERATORS (${ops.length})`, 'var(--blue)');
+    T(SEP);
+    ops.forEach(op => {
+      T(`  ${op.address}`, 'var(--blue)');
+      T(`    Funded ${op.funded_wallets?.length||0} wallet(s):`);
+      (op.funded_wallets||[]).forEach(w => T(`      - ${w.label}  ${w.address}`));
+      T(SEP);
+    });
+  }
+
+  // ── NO ALERTS ─────────────────────────────────────────────────────────────
+  if (spikes.length === 0 && struct.length === 0 && sudden.length === 0 && ops.length === 0) {
+    T('');
+    T('  ✓ No alerts detected in this monitoring window.', 'var(--accent)');
+  }
+
+  T('');
+  T(SEP2);
+  monLog('✓ Results rendered — click EXPORT REPORT to save JSON + DOCX');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ORIGIN TRACE (Page 3)
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _oriTraceData = null;
+
+async function oriSelectTrace(filename) {
+  try {
+    const res  = await fetch('/load-trace/' + encodeURIComponent(filename));
+    const data = await res.json();
+    if (!data.ok) { oriLog('Failed to load: ' + data.error, 'error'); return; }
+    _oriTraceData = data.trace;
+    document.getElementById('ori-file-label').textContent = _oriTraceData.meta?.project_name || filename;
+    document.getElementById('ori-run-btn').disabled = false;
+    document.getElementById('ori-trace-list').style.display = 'none';
+    renderOriWalletSelect();
+    oriLog(`Loaded: ${filename}`);
+  } catch(e) {
+    oriLog('Load error: ' + e.message, 'error');
+  }
+}
+
+function oriBackToList() {
+  document.getElementById('ori-wallet-select').style.display = 'none';
+  document.getElementById('ori-trace-list').style.display = 'block';
+  document.getElementById('ori-run-btn').disabled = true;
+  _oriTraceData = null;
+}
+
+function renderOriWalletSelect() {
+  if (!_oriTraceData) return;
+  const wallets = (_oriTraceData.nodes||[]).filter(n => !['HOT_WALLET_KYC','MIXER','BRIDGE'].includes(n.type) && n.addr);
+  document.getElementById('ori-wallet-count').textContent = `${wallets.length} wallets`;
+  const list = document.getElementById('ori-wallet-list');
+  list.innerHTML = wallets.map((w,i) => `
+    <div class="wallet-select-item">
+      <input type="checkbox" id="ori-w-${i}" checked>
+      <div class="wsi-info">
+        <div class="wsi-addr">${w.addr}</div>
+        <div class="wsi-meta">${w.type} — ${w.label} — Hop ${w.hop_depth??0}</div>
+      </div>
+    </div>`).join('');
+  document.getElementById('ori-wallet-select').style.display = 'block';
+}
+
+function oriSelectAll(checked) {
+  document.querySelectorAll('#ori-wallet-list input[type=checkbox]').forEach(cb => cb.checked = checked);
+}
+
+function getSelectedOriWallets() {
+  if (!_oriTraceData) return [];
+  const wallets = (_oriTraceData.nodes||[]).filter(n => !['HOT_WALLET_KYC','MIXER','BRIDGE'].includes(n.type) && n.addr);
+  return wallets.filter((w,i) => {
+    const cb = document.getElementById(`ori-w-${i}`);
+    return cb && cb.checked;
+  });
+}
+
+async function runOriginTrace() {
+  let addresses = [];
+  let projectName = '';
+  let ethPrice = _ethPrice || 0;
+
+  // Single address mode
+  const singleAddr = document.getElementById('ori-addr-input').value.trim();
+  if (singleAddr && singleAddr.startsWith('0x') && singleAddr.length === 42) {
+    addresses = [{ addr: singleAddr, label: 'Manual-Entry' }];
+  } else if (_oriTraceData) {
+    addresses   = getSelectedOriWallets();
+    projectName = _oriTraceData.meta?.project_name || '';
+    ethPrice    = _oriTraceData.meta?.eth_price_usd || ethPrice;
+  }
+
+  if (!addresses.length) {
+    oriLog('No wallets selected or valid address entered', 'error');
+    return;
+  }
+
+  document.getElementById('ori-run-btn').disabled = true;
+  document.getElementById('ori-progress').classList.add('indeterminate');
+
+  // Hide trace list and wallet select immediately
+  document.getElementById('ori-trace-list').style.display = 'none';
+  document.getElementById('ori-wallet-select').style.display = 'none';
+
+  // Show live log, hide table
+  document.getElementById('ori-log-terminal').textContent = '';
+  document.getElementById('ori-counter').textContent = 'Initialising...';
+  document.getElementById('ori-live').style.display = 'block';
+  document.getElementById('ori-table-wrap').style.display = 'none';
+  document.getElementById('ori-summary').innerHTML = '';
+  document.getElementById('ori-chains').innerHTML = '';
+  document.getElementById('ori-download').style.display = 'none';
+  document.getElementById('ori-results').style.display = 'block';
+
+  oriLog(`Starting Origin Trace — ${addresses.length} wallet(s)`);
+
+  try {
+    const payload = { addresses, project_name: projectName, eth_price: ethPrice };
+
+    const response = await fetch('/origin-trace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const msg = JSON.parse(line.slice(6));
+          if (msg.type === 'log') {
+            oriLog(msg.msg, msg.level === 'warn' ? 'warn' : msg.level === 'error' ? 'error' : 'info');
+          } else if (msg.type === 'done') {
+            result = msg;
+            oriLog('Origin Trace complete ✓ — click EXPORT REPORT to save files');
+            _oriResult = result.result;
+            renderOriginResults(result.result);
+            document.getElementById('ori-export-btn').disabled = false;
+          } else if (msg.type === 'error') {
+            oriLog('Error: ' + msg.msg, 'error');
+          }
+        } catch(e) {}
+      }
+    }
+
+    if (!result) {
+      oriLog('No result received', 'error');
+    }
+
+  } catch(err) {
+    oriLog('Origin Trace failed: ' + err.message, 'error');
+  }
+
+  document.getElementById('ori-run-btn').disabled = false;
+  document.getElementById('ori-progress').classList.remove('indeterminate');
+}
+
+async function runOriginTraceAll() {
+  oriSelectAll(true);
+  await runOriginTrace();
+}
+
+function renderOriginResults(data) {
+  const traces  = data.traces || [];
+  const summary = data.summary || {};
+  const exchanges = summary.exchanges_found || [];
+  const mixers    = summary.mixers_found || [];
+
+  // Stat boxes
+  const newWallets = summary.total_wallets_discovered || 0;
+  let summaryHtml = `<div class="stat-grid" style="margin-bottom:16px">
+    <div class="stat-box"><span class="sb-val">${traces.length}</span><span class="sb-lbl">WALLETS TRACED</span></div>
+    <div class="stat-box"><span class="sb-val" style="color:var(--accent2)">${exchanges.length}</span><span class="sb-lbl">EXCHANGES FOUND</span></div>
+    <div class="stat-box"><span class="sb-val" style="color:var(--red)">${mixers.length}</span><span class="sb-lbl">MIXERS DETECTED</span></div>
+    <div class="stat-box">
+      <span class="sb-val">${newWallets}</span>
+      <span class="sb-lbl">NEW WALLETS DISCOVERED</span>
+      <span style="font-size:9px;color:var(--text-dim);display:block;margin-top:3px;letter-spacing:0.5px">not in original trace</span>
+    </div>
+  </div>`;
+
+  if (mixers.length > 0) summaryHtml += `<div class="alert-card alert-high" style="margin-bottom:10px"><div class="alert-card-header">🚨 MIXER DETECTED — ${mixers.join(', ')} — Intentional obfuscation. Strong laundering indicator.</div></div>`;
+  if (exchanges.length > 0) summaryHtml += `<div class="alert-card alert-med" style="margin-bottom:10px"><div class="alert-card-header">⚠ EXCHANGE IDENTIFIED — ${exchanges.join(', ')} — KYC records obtainable via legal process.</div></div>`;
+
+  document.getElementById('ori-summary').innerHTML = summaryHtml;
+
+  // Summary table
+  const rows = traces.map(trace => {
+    const narr     = trace.narrative || {};
+    const hops     = trace.hops || [];
+    const hopCount = Math.max(0, hops.length - 1);
+
+    const knownHop   = hops.find(h => h.classification !== 'REGULAR' && h.hop > 0);
+    const relayCount = hops.filter(h => h.classification === 'REGULAR' && h.hop > 0).length;
+    const depthLimit = !knownHop && relayCount > 0;
+
+    let fundingSource = '—';
+    if (narr.mixer_detected) {
+      fundingSource = `Tornado Cash → ${relayCount} relay${relayCount !== 1 ? 's' : ''}`;
+    } else if (knownHop) {
+      const name = knownHop.exchange_label || knownHop.classification;
+      fundingSource = relayCount > 0 ? `${name} → ${relayCount} relay${relayCount !== 1 ? 's' : ''}` : name;
+    } else if (depthLimit) {
+      fundingSource = `<span style="color:var(--yellow)">⚠ DEPTH LIMIT</span> <span style="color:var(--text-dim);font-size:10px">(${relayCount} relay${relayCount !== 1 ? 's' : ''}, origin not reached)</span>`;
+    }
+
+    const exchHit = narr.exchange_detected ? (narr.exchange_names || []).join(', ') : '—';
+    const addr    = trace.target_address || '';
+    const addrShort = addr ? addr.slice(0,6) + '…' + addr.slice(-4) : '—';
+
+    return `<tr>
+      <td>
+        <span style="color:var(--accent);font-family:var(--mono);font-size:11px">${addrShort}</span>
+        <button class="copy-btn" onclick="copyFlash('${addr}')" style="margin-left:4px">COPY</button>
+        <div style="color:var(--text-dim);font-size:10px;margin-top:2px">${trace.target_label||''}</div>
+      </td>
+      <td style="font-size:11px">${fundingSource}</td>
+      <td style="font-size:11px;text-align:center">${hopCount}</td>
+      <td style="color:var(--accent2);font-size:11px">${exchHit}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ori-chains').innerHTML = `
+    <table class="data-table">
+      <thead><tr>
+        <th>ADDRESS</th>
+        <th>FUNDING SOURCE</th>
+        <th style="text-align:center">HOPS</th>
+        <th>EXCHANGE HIT</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  // Swap: hide live log, show table
+  document.getElementById('ori-live').style.display = 'none';
+  document.getElementById('ori-table-wrap').style.display = 'block';
+  document.getElementById('ori-results').style.display = 'block';
+}
+
+</script>
+</body>
+</html>

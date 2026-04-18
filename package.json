@@ -1,0 +1,12 @@
+{
+  "name": "neural-trace",
+  "version": "2.0.0",
+  "description": "Blockchain Forensic Intelligence Platform — Forward Trace, Origin Trace, Monitor",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "docx": "^9.6.1"
+  }
+}
